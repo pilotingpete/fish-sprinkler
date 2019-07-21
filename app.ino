@@ -5,15 +5,22 @@ void setup()
 
 /* State Machine */
 typedef void (*fp)( void );
-fp machine_state = wakeup; /* Initial machine_state */
+fp machine_state = wakeup; /* Init the state machine */
 
 
-/* Machine states */
+/* wakeup
+* A machine state for setting default parameters.
+*
+ */
 static void wakeup( void )
 {
     machine_state = led_on;
 }
 
+/* led_on
+* A Machine state for turning ON the LED.
+*
+ */
 static void led_on( void )
 {
     digitalWrite(LED_BUILTIN, HIGH);
