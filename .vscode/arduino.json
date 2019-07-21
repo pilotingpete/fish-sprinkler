@@ -2,5 +2,5 @@
     "sketch": "app.ino",
     "board": "arduino:avr:nano",
     "configuration": "cpu=atmega328",
-    "port": "/dev/cu.usbmodem146101"
+    "port": "/dev/cu.usbmodem144101"
 }
