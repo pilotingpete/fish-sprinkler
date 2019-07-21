@@ -1,18 +1,32 @@
+
+/* GPIO pin defines */
+#define DRV__WATER      2   /* Water Solenoid Drive*/
+#define DRV__AIR        4   /* Air Solenoid Drive */
+#define _MON__OVERRIDE   7  /* Switch Input - Active Low */
+#define MON__MOTION     8   /* PIR Motion Detector */
+
 void setup()
 {
     /* Add serial support. */
     Serial.begin(9600);
 
-    /* GPIO setup. */
-    pinMode(LED_BUILTIN, OUTPUT);
+    /* Digital Outputs */
+    pinMode( LED_BUILTIN, OUTPUT ); /* Pin 13 Arduino board LED */
+    pinMode( DRV__AIR, OUTPUT );    
+    pinMode( DRV__WATER, OUTPUT );
+
+    /* Digital Inputs */
+    pinMode( MON__MOTION, INPUT );
+    pinMode( _MON__OVERRIDE, INPUT_PULLUP );
+
 }
 
 /* State Machine */
 typedef void (*fp)( void );
-fp machine_state = wakeup; /* Init the state machine */
+fp machine_state = st_wakeup; /* Init the state machine */
 
 
-/* wakeup
+/* st_wakeup
 * A machine state for setting default parameters.
 *
  */
@@ -27,25 +41,37 @@ static void wakeup( void )
     Serial.println( "      |__/                                     |_|                            " );
     Serial.println( "" );
 
-    machine_state = led_on;
+    machine_state = st_idle;
 }
 
-/* led_on
+/* st_idle
+* A machine state to sit in waiting for motion to be detected.
+*
+ */
+static void st_idle( void )
+{
+    if( 1 )
+    {
+        /* Motion detected! */
+        machine_state = st_led_on;
+    }
+}
+/* st_led_on
 * A Machine state for turning ON the LED.
 *
  */
-static void led_on( void )
+static void st_led_on( void )
 {
     digitalWrite(LED_BUILTIN, HIGH);
     delay(50); 
     machine_state = led_off;
 }
 
-static void led_off( void )
+static void st_led_off( void )
 {
     digitalWrite(LED_BUILTIN, LOW);
     delay(1000);    
-    machine_state = led_on;
+    machine_state = st_led_on;
 }
 
 void loop()
