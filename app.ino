@@ -1,3 +1,12 @@
+/* Global Vars */
+uint8_t manual_override = 0;
+uint8_t motion_detected = 0;
+uint16_t cycle_count = 0;
+
+/* Cycle times */
+uint8_t rearm_seconds = 10;
+uint16_t water_fill_ms = 2500;
+uint16_t air_actuation_ms = 300;
 
 /* GPIO pin defines */
 #define DRV__WATER      2   /* Water Solenoid Drive*/
