@@ -83,6 +83,18 @@ uint8_t is_override( void )
     return retval;
 }
 
+/* clear_inputFlags
+* Clear the flags from the PIR & override ISR.
+* This might be a noisy environment with the 
+* solenoids so could be good to flear the flags
+* after solenoid actuation and before checking them.
+  */
+void clear_input_flags( void )
+{
+    manual_override = 0;
+    motion_detected = 0;
+}
+
 /* is_motion
 * Tests if the motion detector
 * flag is set.
@@ -151,6 +163,8 @@ static void st_wakeup( void )
     Serial.println( "        |___/                                                |_|                                  " );
     Serial.println( "" );
 
+    clear_input_flags();
+
     DEBUG( millis(), "State: st_water_fill" );
     machine_state = st_water_fill;
 }
@@ -163,7 +177,9 @@ static void st_water_fill( void )
     sol_water_on();
     delay( (uint32_t)water_fill_ms ); 
     sol_water_off();
+    delay( 250 );
 
+    clear_input_flags();
     system_armed = 1;
 
     DEBUG( millis(), "State: st_idle" );
@@ -180,6 +196,10 @@ static void st_idle( void )
     if( is_motion() || is_override() )
     {
         /* Motion detected! */
+        cycle_count++;
+        Serial.print( "This is actuation count: ");
+        Serial.println( cycle_count );
+
         DEBUG( millis(), "State: st_actuate" );
         machine_state = st_actuate;
     }
@@ -194,6 +214,7 @@ static void st_actuate( void )
     sol_air_on();
     delay( (uint32_t)air_actuation_ms );
     sol_air_off();
+    delay( 250 );
 
     DEBUG( millis(), "State: st_rearm_delay" );
     machine_state = st_rearm_delay;
@@ -206,8 +227,7 @@ static void st_actuate( void )
  */
 static void st_rearm_delay( void )
 {
-    /* Clear the override flag */
-    while( is_override() ){};
+    clear_input_flags();
 
     uint32_t start_time = millis();
 
@@ -216,6 +236,7 @@ static void st_rearm_delay( void )
         /* Bail early if an override has been requested. */
         if( is_override() )
         {
+            Serial.println( "Bailing early on the rearm delay" );
             break;
         }
     }
