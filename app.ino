@@ -15,6 +15,16 @@ uint16_t air_actuation_ms = 300;
 #define _MON__OVERRIDE  2   /* Switch Input - Active Low */
 #define MON__MOTION     3   /* PIR Motion Detector */
 
+#define DO_DEBUG
+#ifdef DO_DEBUG
+    #define DEBUG( time_stamp, s ) {Serial.print( "Debug: " );  \
+                                    Serial.print( time_stamp ); \
+                                    Serial.print( " ms, " );       \
+                                    Serial.println( s );}
+#else
+    #define DEBUG( t, s ) 
+#endif
+
 void setup()
 {
     /* Add serial support. */
@@ -35,25 +45,28 @@ void setup()
 /* ISR__motion_detected
 * External interrupt called when
 * the PIR sensor is activated.
+*
+* @warn This also disarms the system,
+* so you will need to manually arm 
+* it again to retrigger.
   */
 void ISR__motion_detected( void )
 {
     if( system_armed )
     {
-        motion_detected = 1;
+        //system_armed = 0;
+        //motion_detected = 1;
     }
 }
 
 /* ISR__override
 * External interrupt called when 
 * a switch pulls the pin to GND.
+* 
   */
 void ISR__override( void )
 {
-    if( system_armed )
-    {
-        manual_override = 1;
-    }
+    manual_override = 1;
 }
 
 /* is_override
@@ -67,6 +80,20 @@ uint8_t is_override( void )
 {
     const uint8_t retval = manual_override == 1 ? 1 : 0;
     manual_override = 0;
+    return retval;
+}
+
+/* is_motion
+* Tests if the motion detector
+* flag is set.
+* This will also clear the flag.
+* 
+* @return 1 if set, else 0.
+  */
+uint8_t is_motion( void )
+{
+    const uint8_t retval = motion_detected == 1 ? 1 : 0;
+    motion_detected = 0;
     return retval;
 }
 
@@ -114,44 +141,89 @@ static void st_wakeup( void )
 {
     /* Print welcome banner. */
     Serial.println( "" );
-    Serial.println( "  ___                _      ___ _    _      ___          _      _   _         " );
-    Serial.println( " | __|   _ __ _ _ _ ( )___ | __(_)__| |_   / __|_ __ _ _(_)_ _ | |_| |___ _ _ " );
-    Serial.println( " |   / || / _` | ' \|/(_-< | _|| (_-< ' \  \__ \ '_ \ '_| | ' \| / / / -_) '_|" );
-    Serial.println( " |_|_\\_, \__,_|_||_| /__/ |_| |_/__/_||_| |___/ .__/_| |_|_||_|_\_\_\___|_|  " );
-    Serial.println( "      |__/                                     |_|                            " );
+    Serial.println( "  _____                   _       ______ _     _        _____            _       _    _           " );
+    Serial.println( " |  __ \\                ( )     |  ____(_)   | |      / ____|          (_)     | |  | |          " );
+    Serial.println( " | |__) |   _  __ _ _ __ |/ ___  | |__   _ ___| |__   | (___  _ __  _ __ _ _ __ | | _| | ___ _ __ " );
+    Serial.println( " |  _  / | | |/ _` | '_ \\ / __| |  __| | / __| '_ \\ \\__ \\| '_\\| '__| | '_\\| |/ / |/ _\\ '__|" );
+    Serial.println( " | |\\\\ |_| | (_| | | | |\\__ \\| |    | \\_\\ | | |  ____) | |_) | |  | | | | |   <| |  __/ |   " );
+    Serial.println( " |_| \\\\__, \\__,_|_| |_| |___/ |_|    |_|___/_| |_| |_____/| .__/|_|  |_|_| |_|_\\\\_\\___|_|   " );
+    Serial.println( "         __/ |                                               | |                                  " );
+    Serial.println( "        |___/                                                |_|                                  " );
     Serial.println( "" );
 
+    DEBUG( millis(), "State: st_water_fill" );
+    machine_state = st_water_fill;
+}
+
+/* st_water_fill
+* A Machine state for filling the water chamber.
+ */
+static void st_water_fill( void )
+{
+    sol_water_on();
+    delay( (uint32_t)water_fill_ms ); 
+    sol_water_off();
+
+    system_armed = 1;
+
+    DEBUG( millis(), "State: st_idle" );
     machine_state = st_idle;
 }
 
+
 /* st_idle
-* A machine state to sit in waiting for motion to be detected.
+* A machine state to sit in while waiting for 
+* motion to be detected.
  */
 static void st_idle( void )
 {
-    if( 1 )
+    if( is_motion() || is_override() )
     {
         /* Motion detected! */
-        machine_state = st_led_on;
+        DEBUG( millis(), "State: st_actuate" );
+        machine_state = st_actuate;
     }
 }
 
-/* st_led_on
-* A Machine state for turning ON the LED.
+/* st_actuate
+* A machine state to actuate the air solenoid.
+* This it the main feature.
  */
-static void st_led_on( void )
+static void st_actuate( void )
 {
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(50); 
-    machine_state = st_led_off;
+    sol_air_on();
+    delay( (uint32_t)air_actuation_ms );
+    sol_air_off();
+
+    DEBUG( millis(), "State: st_rearm_delay" );
+    machine_state = st_rearm_delay;
 }
 
-static void st_led_off( void )
+
+/* st_rearm_delay
+* A machine state to delay before rearming the 
+* water feature.
+ */
+static void st_rearm_delay( void )
 {
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(1000);    
-    machine_state = st_led_on;
+    /* Clear the override flag */
+    while( is_override() ){};
+
+    uint32_t start_time = millis();
+
+    while( millis() - start_time < (uint32_t)rearm_ms )
+    {
+        /* Bail early if an override has been requested. */
+        if( is_override() )
+        {
+            break;
+        }
+    }
+
+    DEBUG( millis(), "State: st_water_fill" );
+    machine_state = st_water_fill;
 }
+
 
 void loop()
 {
